@@ -1,0 +1,8 @@
+secrets.h
+build/
+*.raw
+*.knxraw
+*.bin
+*.log
+.vscode/
+
