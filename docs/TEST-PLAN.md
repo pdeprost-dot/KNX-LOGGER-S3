@@ -16,3 +16,6 @@ Une fréquence n'est déclarée fiable qu'après validation réelle. Un fichier 
 - Le firmware final arrête désormais l'acquisition dès la première écriture courte/échouée, allume ERROR et conserve l'absence de `session-end.json` comme marqueur d'interruption.
 
 Avant de reprendre le jalon : vérifier la carte sur PC (test intégral lecture/écriture, formatage FAT32 complet), puis réinsérer et recommencer à 83 333 S/s. Ne pas augmenter la fréquence ADC.
+### Validation après formatage FAT32 complet
+
+Session `S-5B4CEF5D384AB1D3` : 603,9 s à 83 333 S/s demandés, 83 302,8 S/s observés, 50 304 000 samples acquis au dernier relevé avant STOP, zéro sample perdu, zéro overflow DMA, zéro overflow buffer, zéro erreur SD. `STOP` a été exécuté proprement. Taille avant fermeture : 102 571 424 octets ; débit moyen : 169 857 octets/s ; heap minimum : 171 916 octets ; PSRAM libre : 7 268 292 octets. Validation CRC et continuité sur PC encore requise après retrait de la carte.
