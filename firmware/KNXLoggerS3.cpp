@@ -28,6 +28,7 @@ struct SampleBlock {
 struct Runtime {
   std::atomic<bool> recording{false};
   std::atomic<bool> stopping{false};
+  std::atomic<bool> stopRequested{false};
   std::atomic<uint64_t> acquired{0}, written{0}, lost{0};
   std::atomic<uint32_t> dmaOverflows{0}, bufferOverflows{0}, sdErrors{0};
   std::atomic<uint64_t> lastActivityUs{0};
@@ -75,6 +76,7 @@ void atomicMin(std::atomic<uint32_t> &target, uint32_t value) {
 bool writeAll(const void *data, size_t bytes) {
   if (!rawFile || rawFile.write(static_cast<const uint8_t *>(data), bytes) != bytes) {
     rt.sdErrors++;
+    rt.stopRequested = true;
     digitalWrite(cfg::kLedError, HIGH);
     return false;
   }
@@ -234,6 +236,7 @@ bool openNextSegment() {
 
 void adcTask(void *) {
   while (true) {
+    if (rt.stopRequested) { vTaskDelay(pdMS_TO_TICKS(10)); continue; }
     if (!rt.recording) { vTaskDelay(pdMS_TO_TICKS(10)); continue; }
     uint32_t bytes = 0;
     esp_err_t err = adc_continuous_read(adcHandle, dma, sizeof(dma), &bytes, 50);
@@ -274,14 +277,14 @@ void writerTask(void *) {
         continue;
       }
       if (writeRecord(RecordType::Data, block->firstIndex, block->samples, payloadBytes)) rt.written += block->count;
-      else rt.lost += block->count;
+      else { rt.lost += block->count; vTaskDelay(pdMS_TO_TICKS(10)); }
       xQueueSend(freeQueue, &block, portMAX_DELAY);
       vTaskDelay(1);  // let IDLE0 feed the task watchdog
     }
     if (rt.recording) {
       if (rt.dmaOverflows.load() != seenDma) { seenDma = rt.dmaOverflows; logEvent("DMA_OVERFLOW"); }
       if (rt.bufferOverflows.load() != seenBuffer) { seenBuffer = rt.bufferOverflows; logEvent("BUFFER_OVERFLOW"); }
-      if (rt.sdErrors.load() != seenSd) { seenSd = rt.sdErrors; logEvent("SD_ERROR"); }
+      if (rt.sdErrors.load() != seenSd) { seenSd = rt.sdErrors; digitalWrite(cfg::kLedError, HIGH); }
     }
     if (rt.stopping && uxQueueMessagesWaiting(readyQueue) == 0) {
       if (rawFile) rawFile.flush();
@@ -292,6 +295,7 @@ void writerTask(void *) {
 
 bool startRecording() {
   if (rt.recording || !rt.sdReady) return false;
+  rt.stopRequested = false;
   rt.acquired = rt.written = rt.lost = 0;
   rt.dmaOverflows = rt.bufferOverflows = rt.sdErrors = 0;
   rt.minHeap = ESP.getFreeHeap(); rt.minPsram = ESP.getFreePsram();
@@ -328,6 +332,7 @@ void stopRecording() {
   writeSessionEnd(elapsed);
   rt.sdUsed = SD.usedBytes();
   digitalWrite(cfg::kLedRec, LOW);
+  rt.stopRequested = false;
 }
 String jsonStatus() {
   const uint64_t now = esp_timer_get_time();
@@ -394,6 +399,7 @@ void setup() {
 
 void loop() {
   server.handleClient();
+  if (rt.stopRequested && rt.recording) stopRecording();
   atomicMin(rt.minHeap, ESP.getFreeHeap()); atomicMin(rt.minPsram, ESP.getFreePsram());
   const uint64_t now = esp_timer_get_time();
   digitalWrite(cfg::kLedBus, rt.lastActivityUs && now - rt.lastActivityUs.load() < 25000);

@@ -35,6 +35,13 @@ def inspect(path: Path):
         return result
 
 if __name__ == "__main__":
-    p = argparse.ArgumentParser(); p.add_argument("file", type=Path)
-    print(json.dumps(inspect(p.parse_args().file), indent=2))
+    p = argparse.ArgumentParser(); p.add_argument("path", type=Path)
+    path = p.parse_args().path
+    files = sorted(path.glob("raw-*.bin")) if path.is_dir() else [path]
+    reports = [inspect(f) for f in files]
+    summary = {"segments": reports, "segment_count": len(reports),
+               "total_bytes": sum(x["bytes"] for x in reports),
+               "total_data_samples": sum(x["data_samples"] for x in reports),
+               "crc_errors": sum(x["crc_errors"] for x in reports)}
+    print(json.dumps(summary, indent=2))
 
