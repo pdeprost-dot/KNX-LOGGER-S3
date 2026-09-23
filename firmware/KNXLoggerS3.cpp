@@ -327,7 +327,7 @@ void stopRecording() {
   writeRecord(RecordType::Stats, rt.acquired, &stats, sizeof(stats));
   writeRecord(RecordType::End, rt.acquired, nullptr, 0);
   logEvent("STOP");
-  if (rawFile) { rawFile.flush(); rawFile.close(); }
+  if (rawFile) { logEvent("SD_SEGMENT_CLOSE"); rawFile.flush(); rawFile.close(); }
   if (eventsFile) eventsFile.close();
   writeSessionEnd(elapsed);
   rt.sdUsed = SD.usedBytes();
